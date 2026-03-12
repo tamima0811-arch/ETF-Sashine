@@ -126,27 +126,29 @@ with tab_main:
             stages_html = ""
             for i, stage in enumerate(etf["stages"]):
                 limit = math.floor(price * stage["ratio"])
-                stages_html += f"""
-                <div class="stage-cell">
-                    <div class="stage-label">第{i+1}段　{stage['shares']}株</div>
-                    <div class="stage-price">¥{limit:,}</div>
-                    <div class="stage-sub">×{stage['ratio']:.3f}</div>
-                </div>
-                """
-            st.markdown(f"""
-            <div class="etf-card">
-                <div class="etf-title">{code}　{etf['name']}</div>
-                <div class="etf-close">終値 ¥{price:,.0f}　{date}</div>
-                <div class="stage-grid">{stages_html}</div>
-            </div>
-            """, unsafe_allow_html=True)
+                stages_html += (
+                    f'<div class="stage-cell">'
+                    f'<div class="stage-label">第{i+1}段　{stage["shares"]}株</div>'
+                    f'<div class="stage-price">¥{limit:,}</div>'
+                    f'<div class="stage-sub">×{stage["ratio"]:.3f}</div>'
+                    f'</div>'
+                )
+            html = (
+                f'<div class="etf-card">'
+                f'<div class="etf-title">{code}　{etf["name"]}</div>'
+                f'<div class="etf-close">終値 ¥{price:,.0f}　{date}</div>'
+                f'<div class="stage-grid">{stages_html}</div>'
+                f'</div>'
+            )
+            st.markdown(html, unsafe_allow_html=True)
         else:
-            st.markdown(f"""
-            <div class="etf-card">
-                <div class="etf-title">{code}　{etf['name']}</div>
-                <div class="etf-close">↑「株価を取得・更新」を押してください</div>
-            </div>
-            """, unsafe_allow_html=True)
+            st.markdown(
+                f'<div class="etf-card">'
+                f'<div class="etf-title">{code}　{etf["name"]}</div>'
+                f'<div class="etf-close">↑「株価を取得・更新」を押してください</div>'
+                f'</div>',
+                unsafe_allow_html=True
+            )
 
 with tab_settings:
     st.caption("変更後「保存してURLを生成」→ 表示されたURLをブックマーク登録。次回そのURLを開けば設定が引き継がれます。")
