@@ -1,6 +1,8 @@
 import streamlit as st
 import yfinance as yf
 import math
+import json
+import base64
 
 st.set_page_config(
     page_title="指値計算",
@@ -9,35 +11,32 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# ── スマホ向けCSS ──────────────────────────────────────────────────
 st.markdown("""
 <style>
-    /* 更新ボタンを大きく */
-    [data-testid="stButton"] > button {
-        font-size: 1.1rem;
-        height: 3.2rem;
-    }
-    /* 段階ヘッダー */
-    .stage-header {
-        font-size: 0.8rem;
-        color: #888;
-        margin-bottom: 2px;
-    }
-    /* 指値金額を大きく */
-    .limit-price {
-        font-size: 1.4rem;
-        font-weight: bold;
-        color: #4fc3f7;
-    }
-    /* 終値 */
-    .close-price {
-        font-size: 1.0rem;
-        color: #aaa;
-    }
+html, body, [class*="css"] { font-size: 15px; }
+.etf-card {
+    background: #1e1e2e;
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 14px;
+    border: 1px solid #333;
+}
+.etf-title { font-size: 1.05rem; font-weight: bold; color: #ffffff; margin-bottom: 2px; }
+.etf-close { font-size: 0.82rem; color: #888; margin-bottom: 10px; }
+.stage-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.stage-cell { background: #2a2a3e; border-radius: 8px; padding: 8px 10px; }
+.stage-label { font-size: 0.72rem; color: #888; margin-bottom: 2px; }
+.stage-price { font-size: 1.35rem; font-weight: bold; color: #4fc3f7; line-height: 1.1; }
+.stage-sub { font-size: 0.72rem; color: #aaa; margin-top: 2px; }
+[data-testid="stButton"] > button { font-size: 1rem; height: 3rem; border-radius: 10px; }
+.url-box {
+    background: #1e1e2e; border: 1px solid #444; border-radius: 8px;
+    padding: 10px 12px; font-size: 0.78rem; color: #aaa;
+    word-break: break-all; margin-top: 8px;
+}
 </style>
 """, unsafe_allow_html=True)
 
-# ── デフォルト設定（ここを書き換えてもOK） ────────────────────────
 DEFAULT_CONFIG = [
     {
         "code": "1489",
@@ -51,7 +50,7 @@ DEFAULT_CONFIG = [
     },
     {
         "code": "1478",
-        "name": "銘柄B（変更してください）",
+        "name": "銘柄B",
         "stages": [
             {"ratio": 0.995, "shares": 1},
             {"ratio": 0.990, "shares": 2},
@@ -61,7 +60,7 @@ DEFAULT_CONFIG = [
     },
     {
         "code": "2513",
-        "name": "銘柄C（変更してください）",
+        "name": "銘柄C",
         "stages": [
             {"ratio": 0.995, "shares": 1},
             {"ratio": 0.990, "shares": 2},
@@ -71,14 +70,27 @@ DEFAULT_CONFIG = [
     },
 ]
 
-# ── セッション初期化 ──────────────────────────────────────────────
+def load_config_from_params():
+    params = st.query_params
+    if "cfg" in params:
+        try:
+            decoded = base64.urlsafe_b64decode(params["cfg"] + "==").decode("utf-8")
+            return json.loads(decoded)
+        except Exception:
+            pass
+    return None
+
+def encode_config(config):
+    raw = json.dumps(config, ensure_ascii=False)
+    return base64.urlsafe_b64encode(raw.encode("utf-8")).decode("utf-8").rstrip("=")
+
 if "config" not in st.session_state:
-    st.session_state.config = DEFAULT_CONFIG
+    loaded = load_config_from_params()
+    st.session_state.config = loaded if loaded else DEFAULT_CONFIG
+
 if "prices" not in st.session_state:
     st.session_state.prices = {}
 
-
-# ── 株価取得関数 ──────────────────────────────────────────────────
 def fetch_prices():
     results = {}
     for etf in st.session_state.config:
@@ -95,104 +107,79 @@ def fetch_prices():
             results[etf["code"]] = None
     st.session_state.prices = results
 
-
-# ── タブ構成 ─────────────────────────────────────────────────────
 tab_main, tab_settings = st.tabs(["📈 指値確認", "⚙️ 設定"])
 
-
-# ════════════════════════════════════════════════════════════════
-#  メインタブ
-# ════════════════════════════════════════════════════════════════
 with tab_main:
-    st.title("指値計算")
-
     if st.button("🔄　株価を取得・更新", use_container_width=True, type="primary"):
         with st.spinner("取得中..."):
             fetch_prices()
 
-    st.markdown("---")
+    st.markdown("")
 
     for etf in st.session_state.config:
         code = etf["code"]
         price_data = st.session_state.prices.get(code)
 
-        st.subheader(f"{code}　{etf['name']}")
-
         if price_data and price_data.get("price"):
             price = price_data["price"]
             date = price_data["date"]
-
-            st.markdown(
-                f'<span class="close-price">終値 ¥{price:,.0f}　（{date}）</span>',
-                unsafe_allow_html=True
-            )
-
-            # 4段階の指値を表示
-            cols_header = st.columns([1, 3, 2, 2])
-            cols_header[0].markdown('<span class="stage-header">段階</span>', unsafe_allow_html=True)
-            cols_header[1].markdown('<span class="stage-header">指値（円）</span>', unsafe_allow_html=True)
-            cols_header[2].markdown('<span class="stage-header">割合</span>', unsafe_allow_html=True)
-            cols_header[3].markdown('<span class="stage-header">株数</span>', unsafe_allow_html=True)
-
+            stages_html = ""
             for i, stage in enumerate(etf["stages"]):
-                limit = math.floor(price * stage["ratio"])  # 切り捨て
-                cols = st.columns([1, 3, 2, 2])
-                cols[0].write(f"第{i+1}")
-                cols[1].markdown(
-                    f'<span class="limit-price">¥{limit:,}</span>',
-                    unsafe_allow_html=True
-                )
-                cols[2].write(f"×{stage['ratio']:.3f}")
-                cols[3].write(f"{stage['shares']}株")
-
+                limit = math.floor(price * stage["ratio"])
+                stages_html += f"""
+                <div class="stage-cell">
+                    <div class="stage-label">第{i+1}段　{stage['shares']}株</div>
+                    <div class="stage-price">¥{limit:,}</div>
+                    <div class="stage-sub">×{stage['ratio']:.3f}</div>
+                </div>
+                """
+            st.markdown(f"""
+            <div class="etf-card">
+                <div class="etf-title">{code}　{etf['name']}</div>
+                <div class="etf-close">終値 ¥{price:,.0f}　{date}</div>
+                <div class="stage-grid">{stages_html}</div>
+            </div>
+            """, unsafe_allow_html=True)
         else:
-            st.caption("↑「株価を取得・更新」を押してください")
+            st.markdown(f"""
+            <div class="etf-card">
+                <div class="etf-title">{code}　{etf['name']}</div>
+                <div class="etf-close">↑「株価を取得・更新」を押してください</div>
+            </div>
+            """, unsafe_allow_html=True)
 
-        st.markdown("---")
-
-
-# ════════════════════════════════════════════════════════════════
-#  設定タブ
-# ════════════════════════════════════════════════════════════════
 with tab_settings:
-    st.title("設定")
-    st.caption("銘柄コード・銘柄名・割合・株数を自由に変更できます。変更後は「保存」を押してください。")
+    st.caption("変更後「保存してURLを生成」→ 表示されたURLをブックマーク登録。次回そのURLを開けば設定が引き継がれます。")
     st.markdown("---")
-
     new_config = []
 
     for idx, etf in enumerate(st.session_state.config):
-        with st.expander(f"銘柄 {idx + 1}：{etf['code']}　{etf['name']}", expanded=False):
+        with st.expander(f"銘柄 {idx+1}：{etf['code']}　{etf['name']}", expanded=True):
             col_code, col_name = st.columns([1, 2])
             code = col_code.text_input("証券コード", value=etf["code"], key=f"code_{idx}")
             name = col_name.text_input("銘柄名", value=etf["name"], key=f"name_{idx}")
-
             stages = []
-            st.markdown("**段階別 割合 / 株数**")
             for s_idx, stage in enumerate(etf["stages"]):
                 c1, c2 = st.columns(2)
                 ratio = c1.number_input(
-                    f"第{s_idx + 1}段　割合",
+                    f"第{s_idx+1}段　割合",
                     value=float(stage["ratio"]),
-                    min_value=0.800,
-                    max_value=1.000,
-                    step=0.001,
-                    format="%.3f",
+                    min_value=0.800, max_value=1.000, step=0.001, format="%.3f",
                     key=f"ratio_{idx}_{s_idx}"
                 )
                 shares = c2.number_input(
-                    f"株数",
-                    value=int(stage["shares"]),
-                    min_value=1,
-                    step=1,
+                    "株数", value=int(stage["shares"]), min_value=1, step=1,
                     key=f"shares_{idx}_{s_idx}"
                 )
                 stages.append({"ratio": round(ratio, 3), "shares": int(shares)})
-
             new_config.append({"code": code, "name": name, "stages": stages})
 
     st.markdown("---")
-    if st.button("💾　設定を保存", use_container_width=True, type="primary"):
+    if st.button("💾　保存してURLを生成", use_container_width=True, type="primary"):
         st.session_state.config = new_config
-        st.session_state.prices = {}  # 銘柄変わったら価格リセット
-        st.success("✅ 保存しました！「指値確認」タブで更新してください。")
+        st.session_state.prices = {}
+        encoded = encode_config(new_config)
+        base_url = "https://etf-sashine-hq5l6fj7skdh7tuftpp4l2.streamlit.app"
+        full_url = f"{base_url}/?cfg={encoded}"
+        st.success("✅ 保存しました！下のURLをブックマーク登録してください。")
+        st.code(full_url, language=None)
