@@ -1,5 +1,5 @@
 import streamlit as st
-from pandas_datareader import data as pdr
+import yfinance as yf
 import math
 import json
 import base64
@@ -143,13 +143,17 @@ if "prices" not in st.session_state:
 
 def fetch_prices():
     results = {}
+    from datetime import date as dtdate
     for etf in st.session_state.config:
         try:
-            df = pdr.DataReader(f"{etf['code']}.JP", "stooq")
-            if not df.empty:
-                price = float(df["Close"].iloc[0])
-                date = str(df.index[0].date())
-                results[etf["code"]] = {"price": price, "date": date}
+            ticker = yf.Ticker(f"{etf['code']}.T")
+            info = ticker.info
+            price = info.get("previousClose") or info.get("regularMarketPreviousClose")
+            if price:
+                # 日付はhistoryから取得
+                hist = ticker.history(period="5d", auto_adjust=False)
+                date = str(hist.index[-1].date()) if not hist.empty else str(dtdate.today())
+                results[etf["code"]] = {"price": float(price), "date": date}
             else:
                 results[etf["code"]] = None
         except Exception:
