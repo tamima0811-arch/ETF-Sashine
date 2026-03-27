@@ -7,32 +7,42 @@ import base64
 st.set_page_config(
     page_title="指値計算",
     page_icon="📉",
-    layout="centered",
+    layout="wide",
     initial_sidebar_state="collapsed"
 )
 
 st.markdown("""
 <style>
 html, body, [class*="css"] { font-size: 15px; }
+
+/* PC：2列グリッド / スマホ：1列 */
+.etf-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+@media (max-width: 640px) {
+    .etf-grid { grid-template-columns: 1fr; }
+}
+
 .etf-card {
     background: #1e1e2e;
     border-radius: 12px;
-    padding: 14px 16px;
-    margin-bottom: 14px;
+    padding: 12px 14px;
     border: 1px solid #333;
 }
-.etf-title { font-size: 1.05rem; font-weight: bold; color: #ffffff; margin-bottom: 2px; }
-.etf-close { font-size: 0.82rem; color: #888; margin-bottom: 10px; }
-.stage-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.stage-cell { background: #2a2a3e; border-radius: 8px; padding: 8px 10px; }
-.stage-label { font-size: 0.72rem; color: #888; margin-bottom: 2px; }
-.stage-price { font-size: 1.35rem; font-weight: bold; color: #4fc3f7; line-height: 1.1; }
-.stage-sub { font-size: 0.72rem; color: #aaa; margin-top: 2px; }
-[data-testid="stButton"] > button { font-size: 1rem; height: 3rem; border-radius: 10px; }
-.url-box {
-    background: #1e1e2e; border: 1px solid #444; border-radius: 8px;
-    padding: 10px 12px; font-size: 0.78rem; color: #aaa;
-    word-break: break-all; margin-top: 8px;
+.etf-title { font-size: 1.0rem; font-weight: bold; color: #ffffff; margin-bottom: 2px; }
+.etf-close { font-size: 0.78rem; color: #888; margin-bottom: 8px; }
+.stage-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.stage-cell { background: #2a2a3e; border-radius: 8px; padding: 7px 9px; }
+.stage-label { font-size: 0.68rem; color: #888; margin-bottom: 1px; }
+.stage-price { font-size: 1.25rem; font-weight: bold; color: #4fc3f7; line-height: 1.1; }
+.stage-sub { font-size: 0.68rem; color: #aaa; margin-top: 2px; }
+[data-testid="stButton"] > button { font-size: 1rem; height: 2.8rem; border-radius: 10px; }
+
+/* PCでボタンを小さく */
+@media (min-width: 641px) {
+    [data-testid="stButton"] > button { max-width: 300px; }
 }
 </style>
 """, unsafe_allow_html=True)
@@ -68,6 +78,16 @@ DEFAULT_CONFIG = [
             {"ratio": 0.970, "shares": 8},
         ]
     },
+    {
+        "code": "2558",
+        "name": "銘柄D",
+        "stages": [
+            {"ratio": 0.995, "shares": 1},
+            {"ratio": 0.990, "shares": 2},
+            {"ratio": 0.980, "shares": 4},
+            {"ratio": 0.970, "shares": 8},
+        ]
+    },
 ]
 
 def load_config_from_params():
@@ -83,6 +103,36 @@ def load_config_from_params():
 def encode_config(config):
     raw = json.dumps(config, ensure_ascii=False)
     return base64.urlsafe_b64encode(raw.encode("utf-8")).decode("utf-8").rstrip("=")
+
+def make_card(etf, price_data):
+    code = etf["code"]
+    if price_data and price_data.get("price"):
+        price = price_data["price"]
+        date = price_data["date"]
+        stages_html = ""
+        for i, stage in enumerate(etf["stages"]):
+            limit = math.floor(price * stage["ratio"])
+            stages_html += (
+                f'<div class="stage-cell">'
+                f'<div class="stage-label">第{i+1}段　{stage["shares"]}株</div>'
+                f'<div class="stage-price">¥{limit:,}</div>'
+                f'<div class="stage-sub">×{stage["ratio"]:.3f}</div>'
+                f'</div>'
+            )
+        return (
+            f'<div class="etf-card">'
+            f'<div class="etf-title">{code}　{etf["name"]}</div>'
+            f'<div class="etf-close">終値 ¥{price:,.0f}　{date}</div>'
+            f'<div class="stage-grid">{stages_html}</div>'
+            f'</div>'
+        )
+    else:
+        return (
+            f'<div class="etf-card">'
+            f'<div class="etf-title">{code}　{etf["name"]}</div>'
+            f'<div class="etf-close">↑「株価を取得・更新」を押してください</div>'
+            f'</div>'
+        )
 
 if "config" not in st.session_state:
     loaded = load_config_from_params()
@@ -110,45 +160,20 @@ def fetch_prices():
 tab_main, tab_settings = st.tabs(["📈 指値確認", "⚙️ 設定"])
 
 with tab_main:
-    if st.button("🔄　株価を取得・更新", use_container_width=True, type="primary"):
+    if st.button("🔄　株価を取得・更新", type="primary"):
         with st.spinner("取得中..."):
             fetch_prices()
 
-    st.markdown("")
+    cfg = st.session_state.config
+    prices = st.session_state.prices
 
-    for etf in st.session_state.config:
-        code = etf["code"]
-        price_data = st.session_state.prices.get(code)
+    # 4銘柄を2列×2行のグリッドで表示
+    cards_html = '<div class="etf-grid">'
+    for etf in cfg:
+        cards_html += make_card(etf, prices.get(etf["code"]))
+    cards_html += '</div>'
 
-        if price_data and price_data.get("price"):
-            price = price_data["price"]
-            date = price_data["date"]
-            stages_html = ""
-            for i, stage in enumerate(etf["stages"]):
-                limit = math.floor(price * stage["ratio"])
-                stages_html += (
-                    f'<div class="stage-cell">'
-                    f'<div class="stage-label">第{i+1}段　{stage["shares"]}株</div>'
-                    f'<div class="stage-price">¥{limit:,}</div>'
-                    f'<div class="stage-sub">×{stage["ratio"]:.3f}</div>'
-                    f'</div>'
-                )
-            html = (
-                f'<div class="etf-card">'
-                f'<div class="etf-title">{code}　{etf["name"]}</div>'
-                f'<div class="etf-close">終値 ¥{price:,.0f}　{date}</div>'
-                f'<div class="stage-grid">{stages_html}</div>'
-                f'</div>'
-            )
-            st.markdown(html, unsafe_allow_html=True)
-        else:
-            st.markdown(
-                f'<div class="etf-card">'
-                f'<div class="etf-title">{code}　{etf["name"]}</div>'
-                f'<div class="etf-close">↑「株価を取得・更新」を押してください</div>'
-                f'</div>',
-                unsafe_allow_html=True
-            )
+    st.markdown(cards_html, unsafe_allow_html=True)
 
 with tab_settings:
     st.caption("変更後「保存してURLを生成」→ 表示されたURLをブックマーク登録。次回そのURLを開けば設定が引き継がれます。")
