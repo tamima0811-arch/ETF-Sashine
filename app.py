@@ -1,5 +1,5 @@
 import streamlit as st
-import yfinance as yf
+from pandas_datareader import data as pdr
 import math
 import json
 import base64
@@ -145,22 +145,10 @@ def fetch_prices():
     results = {}
     for etf in st.session_state.config:
         try:
-            ticker = yf.Ticker(f"{etf['code']}.T")
-            price = None
-            date = None
-            # fast_infoのprevious_closeを優先（調整なしの実際の終値に近い）
-            try:
-                fi = ticker.fast_info
-                price = float(fi["previous_close"])
-            except Exception:
-                price = None
-            # 日付取得 & fast_infoが失敗した場合のフォールバック
-            hist = ticker.history(period="3d", auto_adjust=False)
-            if not hist.empty:
-                date = str(hist.index[-1].date())
-                if not price:
-                    price = float(hist["Close"].iloc[-1])
-            if price and date:
+            df = pdr.DataReader(f"{etf['code']}.JP", "stooq")
+            if not df.empty:
+                price = float(df["Close"].iloc[0])
+                date = str(df.index[0].date())
                 results[etf["code"]] = {"price": price, "date": date}
             else:
                 results[etf["code"]] = None
