@@ -50,42 +50,42 @@ html, body, [class*="css"] { font-size: 15px; }
 DEFAULT_CONFIG = [
     {
         "code": "1489",
-        "name": "NF日本高配当株",
+        "name": "NF高配当株50",
         "stages": [
             {"ratio": 0.991, "shares": 1},
-            {"ratio": 0.985, "shares": 3},
+            {"ratio": 0.985, "shares": 2},
+            {"ratio": 0.980, "shares": 3},
             {"ratio": 0.975, "shares": 5},
-            {"ratio": 0.965, "shares": 10},
         ]
     },
     {
-        "code": "1478",
-        "name": "銘柄B",
+        "code": "1476",
+        "name": "ISコアJリート",
         "stages": [
             {"ratio": 0.995, "shares": 1},
-            {"ratio": 0.990, "shares": 2},
-            {"ratio": 0.980, "shares": 4},
-            {"ratio": 0.970, "shares": 8},
+            {"ratio": 0.990, "shares": 1},
+            {"ratio": 0.985, "shares": 2},
+            {"ratio": 0.980, "shares": 3},
         ]
     },
     {
-        "code": "2513",
-        "name": "銘柄C",
+        "code": "2638",
+        "name": "GXロボ&AI",
         "stages": [
-            {"ratio": 0.995, "shares": 1},
-            {"ratio": 0.990, "shares": 2},
-            {"ratio": 0.980, "shares": 4},
-            {"ratio": 0.970, "shares": 8},
+            {"ratio": 0.980, "shares": 1},
+            {"ratio": 0.975, "shares": 1},
+            {"ratio": 0.965, "shares": 2},
+            {"ratio": 0.935, "shares": 6},
         ]
     },
     {
-        "code": "2558",
-        "name": "銘柄D",
+        "code": "435A",
+        "name": "日本株配当ローテーション",
         "stages": [
             {"ratio": 0.995, "shares": 1},
-            {"ratio": 0.990, "shares": 2},
-            {"ratio": 0.980, "shares": 4},
-            {"ratio": 0.970, "shares": 8},
+            {"ratio": 0.985, "shares": 1},
+            {"ratio": 0.975, "shares": 3},
+            {"ratio": 0.965, "shares": 3},
         ]
     },
 ]
@@ -146,7 +146,7 @@ def fetch_prices():
     for etf in st.session_state.config:
         try:
             ticker = yf.Ticker(f"{etf['code']}.T")
-            hist = ticker.history(period="3d")
+            hist = ticker.history(period="3d", auto_adjust=False)
             if not hist.empty:
                 close = float(hist["Close"].iloc[-1])
                 date = str(hist.index[-1].date())
