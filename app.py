@@ -146,11 +146,22 @@ def fetch_prices():
     for etf in st.session_state.config:
         try:
             ticker = yf.Ticker(f"{etf['code']}.T")
+            price = None
+            date = None
+            # fast_infoのprevious_closeを優先（調整なしの実際の終値に近い）
+            try:
+                fi = ticker.fast_info
+                price = float(fi["previous_close"])
+            except Exception:
+                price = None
+            # 日付取得 & fast_infoが失敗した場合のフォールバック
             hist = ticker.history(period="3d", auto_adjust=False)
             if not hist.empty:
-                close = float(hist["Close"].iloc[-1])
                 date = str(hist.index[-1].date())
-                results[etf["code"]] = {"price": close, "date": date}
+                if not price:
+                    price = float(hist["Close"].iloc[-1])
+            if price and date:
+                results[etf["code"]] = {"price": price, "date": date}
             else:
                 results[etf["code"]] = None
         except Exception:
