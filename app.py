@@ -122,7 +122,7 @@ def make_card(etf, price_data):
         return (
             f'<div class="etf-card">'
             f'<div class="etf-title">{code}　{etf["name"]}</div>'
-            f'<div class="etf-close">終値 ¥{price:,.0f}　{date}</div>'
+            f'<div class="etf-close">{price_data.get("label","終値")} ¥{price:,.0f}　{date}</div>'
             f'<div class="stage-grid">{stages_html}</div>'
             f'</div>'
         )
@@ -141,19 +141,23 @@ if "config" not in st.session_state:
 if "prices" not in st.session_state:
     st.session_state.prices = {}
 
-def fetch_prices():
+def fetch_prices(use_realtime=False):
     results = {}
     from datetime import date as dtdate
     for etf in st.session_state.config:
         try:
             ticker = yf.Ticker(f"{etf['code']}.T")
             info = ticker.info
-            price = info.get("previousClose") or info.get("regularMarketPreviousClose")
+            if use_realtime:
+                price = info.get("currentPrice") or info.get("regularMarketPrice") or info.get("previousClose")
+                label = "現在値"
+            else:
+                price = info.get("previousClose") or info.get("regularMarketPreviousClose")
+                label = "終値"
             if price:
-                # 日付はhistoryから取得
                 hist = ticker.history(period="5d", auto_adjust=False)
                 date = str(hist.index[-1].date()) if not hist.empty else str(dtdate.today())
-                results[etf["code"]] = {"price": float(price), "date": date}
+                results[etf["code"]] = {"price": float(price), "date": date, "label": label}
             else:
                 results[etf["code"]] = None
         except Exception:
@@ -163,9 +167,11 @@ def fetch_prices():
 tab_main, tab_settings = st.tabs(["📈 指値確認", "⚙️ 設定"])
 
 with tab_main:
-    if st.button("🔄　株価を取得・更新", type="primary"):
+    col_toggle, col_btn = st.columns([1, 2])
+    use_realtime = col_toggle.toggle("現在株価", value=False, help="OFF=前日終値 / ON=現在株価")
+    if col_btn.button("🔄　取得・更新", type="primary", use_container_width=True):
         with st.spinner("取得中..."):
-            fetch_prices()
+            fetch_prices(use_realtime=use_realtime)
 
     cfg = st.session_state.config
     prices = st.session_state.prices
